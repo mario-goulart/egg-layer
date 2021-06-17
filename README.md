@@ -83,7 +83,7 @@ Usage example:
   (`cd egg-dir && chicken-install`), it ends up not using the
   egg compilation cache.
 
-* It's code is disgusting.
+* Its code is disgusting.
 
 * It is just very rough proof-of-concept.  It is incomplete and
   probably full of bugs.
