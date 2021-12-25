@@ -7,6 +7,7 @@ exec csi -s $0 "$@"
 (cond-expand
  (chicken-4
   (use data-structures irregex extras files ports posix utils)
+  (use egg-layer-params)
   (define chicken-major-version 4)
   (define read-list read-file))
  (chicken-5
@@ -22,27 +23,14 @@ exec csi -s $0 "$@"
           (chicken process)
           (chicken process-context)
           (chicken sort)
-          (chicken string)))
+          (chicken string))
+  (import egg-layer-params))
  (else
   (error "Unsupported CHICKEN version.")))
-
-;; External programs
-(define fetcher "wget -nv ~a -O ~a")
-(define tar "tar")
-(define gzip "gzip")
-(define sha1sum "sha1sum")
-
-(define egg-index
-  (sprintf "https://code.call-cc.org/egg-tarballs/~a/index.gz"
-           chicken-major-version))
 
 (define egg-index-compressed-filename "index.gz")
 
 (define egg-index-filename "index")
-
-(define egg-tarball-uri
-  (sprintf "https://code.call-cc.org/egg-tarballs/~a/~~a"
-           chicken-major-version))
 
 (define (filter pred lst)
   (foldr (lambda (x r) (if (pred x) (cons x r) r)) '() lst))
@@ -186,11 +174,9 @@ exec csi -s $0 "$@"
 
   (create-directory out-dir 'recursively)
   (change-directory out-dir)
-  (system* (sprintf fetcher (qs egg-index) egg-index-compressed-filename))
-  (system* (sprintf "~a -dc ~a > ~a"
-                    gzip
-                    egg-index-compressed-filename
-                    egg-index-filename))
+  (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
+  (system* ((uncompress-command) egg-index-compressed-filename
+                                 egg-index-filename))
   (delete-file egg-index-compressed-filename)
 
   (let* ((egg-index (read-egg-index egg-index-filename))
@@ -223,29 +209,27 @@ exec csi -s $0 "$@"
 
             (add-target! egg-tarball-filename 'fetch-tarball #f)
             (make-rule egg-tarball-filename '()
-                       (sprintf fetcher
-                                (sprintf egg-tarball-uri
-                                         (conc egg "/" egg-tarball-filename))
-                                egg-tarball-filename))
+                       ((fetch-command)
+                        ((egg-tarball-url) egg egg-tarball-filename)
+                        egg-tarball-filename))
 
             (add-target! egg-checksum-file 'fetch-checksum #f)
             (make-rule egg-checksum-file '()
-                       (sprintf fetcher
-                                (sprintf egg-tarball-uri
-                                         (conc egg "/" (string-append
-                                                        egg-tarball-filename
-                                                        ".sha1")))
-                                egg-checksum-file))
+                       ((fetch-command)
+                        ((egg-tarball-url)
+                         egg
+                         (string-append egg-tarball-filename ".sha1"))
+                        egg-checksum-file))
 
             (add-target! (make-target egg 'checksum) 'checksum #t)
             (make-rule (make-target egg 'checksum)
                        (list egg-tarball-filename egg-checksum-file)
-                       (sprintf "~a -c ~a" sha1sum egg-checksum-file))
+                       ((checksum-command) egg-checksum-file))
 
             (add-target! egg-unpacked-dir 'unpack #f)
             (make-rule egg-unpacked-dir
                        (list (make-target egg 'checksum))
-                       (sprintf "~a -xzf ~a" tar egg-tarball-filename))
+                       ((extract-command) egg-tarball-filename))
 
             (add-target! (make-target egg 'install) 'install #t)
             (make-rule (make-target egg 'install)

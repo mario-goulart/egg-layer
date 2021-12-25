@@ -4,9 +4,10 @@
 
 `egg-layer` is a tool that generate a Makefile to fetch and install
 CHICKEN eggs.  Differently from chicken-install, it uses egg sources
-from tarballs available at [1].  `egg-layer` uses some external tools
-to fetch, verify and unpack tarballs, namely `wget`, `sha1sum`, `tar`
-and `gzip`.
+from tarballs available at [1].  `egg-layer` relies on external tools
+to fetch, verify and unpack tarballs.  The default configuration uses
+`wget`, `sha1sum`, `tar` and `gzip` (parameters which use those
+commands are configurable -- see `egg-layer-params.scm`).
 
 To generate the dependency graph for Makefile rules, `egg-layer` uses
 information from an index file [2] (gzip-compressed).  The format of
