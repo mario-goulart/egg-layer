@@ -1,0 +1,7 @@
+*.import.*
+*.link
+*.so
+*.o
+egg-layer
+egg-layer.build.sh
+egg-layer.install.sh
