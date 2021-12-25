@@ -41,8 +41,7 @@ Usage example:
     $ make
 
 * [1] https://code.call-cc.org/egg-tarballs/
-* [2] https://code.call-cc.org/egg-tarballs/CHICKEN-MAJOR-VERSION/index.gz
-      (where `CHICKEN-MAJOR-VERSION` can be currently `4` or `5`)
+* [2] https://code.call-cc.org/egg-tarballs/5/index.gz
 
 
 ### Why
@@ -78,7 +77,7 @@ Usage example:
 
 * It completely ignore egg tests.
 
-* It hopefully supports both CHICKEN 4 and 5.
+* It supports only CHICKEN 5.
 
 * Due to the way `egg-layer` uses `chicken-install`
   (`cd egg-dir && chicken-install`), it ends up not using the

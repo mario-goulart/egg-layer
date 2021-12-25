@@ -4,29 +4,19 @@ exec csi -s $0 "$@"
 |#
 
 (import scheme)
-(cond-expand
- (chicken-4
-  (use data-structures irregex extras files ports posix utils)
-  (use egg-layer-params)
-  (define chicken-major-version 4)
-  (define read-list read-file))
- (chicken-5
-  (define chicken-major-version 5)
-  (import (chicken file)
-          (chicken format)
-          (chicken io)
-          (chicken irregex)
-          (chicken pathname)
-          (chicken platform)
-          (chicken port)
-          (chicken pretty-print)
-          (chicken process)
-          (chicken process-context)
-          (chicken sort)
-          (chicken string))
-  (import egg-layer-params))
- (else
-  (error "Unsupported CHICKEN version.")))
+(import (chicken file)
+        (chicken format)
+        (chicken io)
+        (chicken irregex)
+        (chicken pathname)
+        (chicken platform)
+        (chicken port)
+        (chicken pretty-print)
+        (chicken process)
+        (chicken process-context)
+        (chicken sort)
+        (chicken string))
+(import egg-layer-params)
 
 (define egg-index-compressed-filename "index.gz")
 
@@ -99,22 +89,8 @@ exec csi -s $0 "$@"
 
 (define (egg-installed? egg)
   ;; egg is a symbol
-  (cond-expand
-   (chicken-4
-    (let ((setup-info-files
-           (glob (make-pathname (repository-path) "*.setup-info"))))
-      (let loop ((setup-info-files setup-info-files))
-        (if (null? setup-info-files)
-            #f
-            (and-let* ((setup-info-data
-                        (with-input-from-file (car setup-info-files) read))
-                       (egg-name (alist-ref 'egg-name setup-info-data))
-                       (egg-name (string->symbol (car egg-name))))
-              (or (eqv? egg-name egg)
-                  (loop (cdr setup-info-files))))))))
-   (chicken-5
-    (file-exists?
-     (make-pathname (repository-path) (symbol->string egg) "egg-info")))))
+  (file-exists?
+   (make-pathname (repository-path) (symbol->string egg) "egg-info")))
 
 (define (filter-tasks targets task)
   ;; targets is a list of (target task phony?) elements
