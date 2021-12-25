@@ -1,0 +1,10 @@
+;;; egg-layer.egg -*- scheme -*-
+
+((synopsis "egg-layer")
+ (author "Mario Domenech Goulart")
+ (license "BSD")
+ (category tools)
+ (components
+  (extension egg-layer-params)
+  (program egg-layer
+           (component-dependencies egg-layer-params))))
