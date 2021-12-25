@@ -37,6 +37,10 @@ Usage: egg-layer [<options>] <egg>
     * none: only generate the Makefile.
     * unpack: fetch egg and its dependencies and unpack them.
 
+  --config-file|-c <file>:
+    Specify a configuration file alternative to the default one
+    ($HOME/.egglayer.conf).
+
   --force-dependencies:
     Force processing actions for dependencies.  Without this option,
     actions for dependencies which are already installed will be skipped.

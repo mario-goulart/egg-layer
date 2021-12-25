@@ -6,6 +6,7 @@
         (chicken format)
         (chicken io)
         (chicken irregex)
+        (chicken load)
         (chicken pathname)
         (chicken port)
         (chicken pretty-print)
@@ -277,6 +278,10 @@
     * none: only generate the Makefile.
     * unpack: fetch egg and its dependencies and unpack them.
 
+  --config-file|-c <file>:
+    Specify a configuration file alternative to the default one
+    ($HOME/.egglayer.conf).
+
   --force-dependencies:
     Force processing actions for dependencies.  Without this option,
     actions for dependencies which are already installed will be skipped.
@@ -299,6 +304,7 @@
 
 (let ((args (command-line-arguments))
       (out-dir (create-temporary-directory))
+      (config-file #f)
       (keep-output-dir? #f)
       (force-dependencies? #f)
       (valid-actions '(all fetch none unpack))
@@ -318,6 +324,11 @@
                  (unless (memq user-action valid-actions)
                    (die! "Invalid action: ~a" user-action))
                  (set! action user-action))
+               (loop (cddr args)))
+              ((member arg '("-c" "--config-file"))
+               (when (null? (cdr args))
+                 (die! "--config-file|-c requires an argument."))
+               (set! config-file (cadr args))
                (loop (cddr args)))
               ((member arg '("-f" "--force-dependencies"))
                (set! force-dependencies? #t)
@@ -350,6 +361,13 @@
     (usage 1))
 
   (printf "Using ~a as output-directory.\n" out-dir)
+
+  (if config-file
+      (load config-file)
+      (let ((user-config (make-pathname (get-environment-variable "HOME")
+                                        ".egg-layer.conf")))
+        (when (file-exists? user-config)
+          (load user-config))))
 
   (create-directory out-dir 'recursively)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
