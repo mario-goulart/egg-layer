@@ -201,7 +201,9 @@
 
     (with-output-to-file (make-pathname out-dir "Makefile")
       (lambda ()
-        (printf "CHICKEN_REPOSITORY_PATH = ~a\n\n" (default-repository-path))
+        (printf "~a ?= ~a\n\n"
+                "CHICKEN_REPOSITORY_PATH"
+                "$(shell csi -p '(begin (import chicken.platform) (car (repository-path)))')")
 
         (printf "all: ~a\n\n" (make-target egg 'install))
 
