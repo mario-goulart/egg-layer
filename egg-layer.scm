@@ -261,8 +261,8 @@ exec csi -s $0 "$@"
     (fprintf out "Usage: ~a [<options>] <egg>
 
 <options>
-  -o <dir>:
-     output directory (default: current directory)
+  --output-dir|-o <dir>:
+    Output directory (default: current directory)
 " this)
     (exit exit-code)))
 
@@ -277,9 +277,9 @@ exec csi -s $0 "$@"
       (let ((arg (car args)))
         (cond ((member arg '("-h" "-help" "--help"))
                (usage 0))
-              ((equal? arg "-o")
+              ((member arg '("-o" "--output-dir"))
                (when (null? (cdr args))
-                 (die! "-o requires an argument."))
+                 (die! "--output-dir|-o requires an argument."))
                (set! out-dir (cadr args))
                (loop (cddr args)))
               (else
