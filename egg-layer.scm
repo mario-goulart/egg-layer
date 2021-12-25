@@ -352,14 +352,16 @@
     (exit exit-code)))
 
 
-(let ((args (command-line-arguments))
-      (out-dir (create-temporary-directory))
-      (config-file #f)
-      (keep-output-dir? #f)
-      (force-dependencies? #f)
-      (valid-actions '(all fetch none unpack))
-      (action 'all)
-      (eggs '()))
+(let* ((args (command-line-arguments))
+       (out-dir (create-temporary-directory))
+       (config-file #f)
+       (keep-output-dir? #f)
+       (unset (list 'unset))
+       (ntasks unset)
+       (force-dependencies? #f)
+       (valid-actions '(all fetch none unpack))
+       (action 'all)
+       (eggs '()))
 
   ;; Command line parsing
   (let loop ((args args))
@@ -387,11 +389,11 @@
                (when (null? (cdr args))
                  (die! "--parallel-tasks|-j requires an argument."))
                (let ((val (cadr args)))
-                 (parallel-tasks
-                  (and-let* ((v (string->number val)))
-                    (if (negative? v)
-                        #f
-                        val))))
+                 (set! ntasks
+                       (and-let* ((v (string->number val)))
+                         (if (negative? v)
+                             #f
+                             val))))
                (loop (cddr args)))
               ((member arg '("-k" "--keep-output-dir"))
                (set! keep-output-dir? #t)
@@ -425,6 +427,10 @@
         (when (file-exists? user-config)
           (info "Loading configuration file: ~a" user-config)
           (load user-config))))
+
+  ;; Command line options clobber configuration from files
+  (unless (eq? ntasks unset)
+    (parallel-tasks ntasks))
 
   (create-directory out-dir 'recursively)
   (generate-makefile eggs force-dependencies? out-dir)
