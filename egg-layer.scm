@@ -1,10 +1,8 @@
-#!/bin/sh
-#| -*- scheme -*-
-exec csi -s $0 "$@"
-|#
+(module egg-layer ()
 
 (import scheme)
-(import (chicken file)
+(import (chicken base)
+        (chicken file)
         (chicken format)
         (chicken io)
         (chicken irregex)
@@ -334,3 +332,5 @@ exec csi -s $0 "$@"
   (unless keep-output-dir?
     (printf "Removing ~a.\n" out-dir)
     (delete-directory out-dir 'recursively)))
+
+) ;; end module
