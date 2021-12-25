@@ -76,6 +76,28 @@ Usage: egg-layer [<options>] <egg> ...
   and install eggs
 
 
+### Configuration
+
+`egg-layer` loads `$HOME/.egg-layer.conf` if it exists.  See
+`egg-layer-params.scm` for the possible configuration parameters.
+
+Here's an example, which sets the parallelization option to the number
+of CPUs on a Linux system:
+
+```
+(import (chicken process))
+(import egg-layer-params)
+
+(parallel-tasks (with-input-from-pipe "nproc" read)
+```
+
+Alternatively, you can use the `--config-file` command line parameter
+to specify another file (in this case, `$HOME/.egg-layer.conf` will
+not be loaded).
+
+Command line options clobber settings make in configuration files.
+
+
 ### Bugs, limitations and assorted notes
 
 * It has been very minimally tested on Linux with GNU make.
