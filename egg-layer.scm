@@ -117,50 +117,7 @@ exec csi -s $0 "$@"
   (apply fprintf (cons (current-error-port)
                        (cons (string-append fmt "\n") args))))
 
-(define (usage exit-code)
-  (let ((out (if (zero? exit-code)
-                 (current-output-port)
-                 (current-error-port)))
-        (this (pathname-strip-directory (program-name))))
-    (fprintf out "Usage: ~a [<options>] <egg>
-
-<options>
-  -o <dir>:
-     output directory (default: current directory)
-" this)
-    (exit exit-code)))
-
-
-(let ((args (command-line-arguments))
-      (out-dir (current-directory))
-      (egg #f))
-
-  ;; Command line parsing
-  (let loop ((args args))
-    (unless (null? args)
-      (let ((arg (car args)))
-        (cond ((member arg '("-h" "-help" "--help"))
-               (usage 0))
-              ((equal? arg "-o")
-               (when (null? (cdr args))
-                 (die! "-o requires an argument."))
-               (set! out-dir (cadr args))
-               (loop (cddr args)))
-              (else
-               (if (null? (cdr args))
-                   (set! egg (string->symbol (car args)))
-                   (usage 1)))))))
-
-  (unless egg
-    (usage 1))
-
-  (create-directory out-dir 'recursively)
-  (change-directory out-dir)
-  (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
-  (system* ((uncompress-command) egg-index-compressed-filename
-                                 egg-index-filename))
-  (delete-file egg-index-compressed-filename)
-
+(define (generate-makefile egg)
   (let* ((egg-index (read-egg-index egg-index-filename))
          (entry (get-egg-entry egg egg-index))
          (visited '()))
@@ -295,3 +252,49 @@ exec csi -s $0 "$@"
                                (cons (car target) (loop (cdr targets)))
                                (loop (cdr targets))))))))
           )))))
+
+(define (usage exit-code)
+  (let ((out (if (zero? exit-code)
+                 (current-output-port)
+                 (current-error-port)))
+        (this (pathname-strip-directory (program-name))))
+    (fprintf out "Usage: ~a [<options>] <egg>
+
+<options>
+  -o <dir>:
+     output directory (default: current directory)
+" this)
+    (exit exit-code)))
+
+
+(let ((args (command-line-arguments))
+      (out-dir (current-directory))
+      (egg #f))
+
+  ;; Command line parsing
+  (let loop ((args args))
+    (unless (null? args)
+      (let ((arg (car args)))
+        (cond ((member arg '("-h" "-help" "--help"))
+               (usage 0))
+              ((equal? arg "-o")
+               (when (null? (cdr args))
+                 (die! "-o requires an argument."))
+               (set! out-dir (cadr args))
+               (loop (cddr args)))
+              (else
+               (if (null? (cdr args))
+                   (set! egg (string->symbol (car args)))
+                   (usage 1)))))))
+
+  (unless egg
+    (usage 1))
+
+  (create-directory out-dir 'recursively)
+  (change-directory out-dir)
+  (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
+  (system* ((uncompress-command) egg-index-compressed-filename
+                                 egg-index-filename))
+  (delete-file egg-index-compressed-filename)
+
+  (generate-makefile egg))
