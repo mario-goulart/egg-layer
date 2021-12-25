@@ -57,6 +57,9 @@ Usage: egg-layer [<options>] <egg> ...
     The value of this parameter maps to the value of the -j parameter
     for make.  If given a negative value, -j for make will be given no
     value.
+
+  --verbose:
+    Print more information to the output.
 ```
 
 * [1] https://code.call-cc.org/egg-tarballs/

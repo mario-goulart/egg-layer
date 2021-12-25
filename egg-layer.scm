@@ -16,6 +16,8 @@
         (chicken string))
 (import egg-layer-params)
 
+(define verbose? #f)
+
 (define egg-index-compressed-filename "index.gz")
 
 (define egg-index-filename "index")
@@ -114,6 +116,11 @@
                        (cons (string-append fmt "\n") args)))
   (exit 1))
 
+(define (info fmt . args)
+  (when verbose?
+    (apply fprintf (cons (current-output-port)
+                         (cons (string-append fmt "\n") args)))))
+
 (define (generate-makefile eggs force-dependencies? out-dir)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
   (system* ((uncompress-command) egg-index-compressed-filename
@@ -131,9 +138,16 @@
     (memq egg visited))
 
   (define (shell-unless-egg-installed egg shell-exp)
-    (if force-dependencies?
-        shell-exp
-        (shell-or (shell-egg-installed? egg) shell-exp)))
+    (string-append
+     (if verbose? "" "@")
+     (sprintf "~a ~a"
+              (if force-dependencies?
+                  shell-exp
+                  (shell-or (shell-egg-installed? egg) shell-exp))
+              (if verbose? "" "$(QUIET)"))))
+
+  (define (make-info egg message)
+    (sprintf "@echo [~a] ~a" egg message))
 
   (define (gen-egg-rules egg entry)
     ;; FIXME: this is a mess.  This procedure prints make rules and
@@ -154,6 +168,7 @@
 
           (add-target! egg-tarball-filename 'fetch-tarball #f)
           (make-rule egg-tarball-filename '()
+                     (make-info egg "Fetching")
                      (shell-unless-egg-installed egg
                        ((fetch-command)
                         ((egg-tarball-url) egg egg-tarball-filename)
@@ -161,6 +176,7 @@
 
           (add-target! egg-checksum-file 'fetch-checksum #f)
           (make-rule egg-checksum-file '()
+                     (make-info egg "Fetching checksum file")
                      (shell-unless-egg-installed egg
                        ((fetch-command)
                         ((egg-tarball-url)
@@ -171,12 +187,14 @@
           (add-target! (make-target egg 'checksum) 'checksum #t)
           (make-rule (make-target egg 'checksum)
                      (list egg-tarball-filename egg-checksum-file)
+                     (make-info egg "Checking sum")
                      (shell-unless-egg-installed egg
                        ((checksum-command) egg-checksum-file)))
 
           (add-target! egg-unpacked-dir 'unpack #f)
           (make-rule egg-unpacked-dir
                      (list (make-target egg 'checksum))
+                     (make-info egg "Unpacking")
                      (shell-unless-egg-installed egg
                        ((extract-command) egg-tarball-filename)))
 
@@ -199,6 +217,7 @@
                               (add-target! (make-target dep 'install) 'install #t)
                               (cons (make-target dep 'install)
                                     (loop (cdr deps)))))))
+                     (make-info egg "Building and installing")
                      (shell-unless-egg-installed egg
                        (sprintf "(cd ~a-~a && $(CHICKEN_INSTALL))"
                                 egg egg-version)))
@@ -206,6 +225,9 @@
 
   (with-output-to-file (make-pathname out-dir "Makefile")
     (lambda ()
+      (printf "QUIET ?= ~a\n" (if verbose? "''" ">/dev/null 2>&1"))
+      (when verbose?
+        (printf "CSC_OPTIONS ?= -verbose\n"))
       (printf "CSI ?= ~a\n" (csi-program))
       (printf "CHICKEN_INSTALL ?= ~a\n" (chicken-install-program))
       (printf "~a ?= ~a\n\n"
@@ -323,6 +345,9 @@
     The value of this parameter maps to the value of the -j parameter
     for make.  If given a negative value, -j for make will be given no
     value.
+
+  --verbose:
+    Print more information to the output.
 " this)
     (exit exit-code)))
 
@@ -377,6 +402,9 @@
                (set! keep-output-dir? #t)
                (set! out-dir (cadr args))
                (loop (cddr args)))
+              ((member arg '("-v" "--verbose"))
+               (set! verbose? #t)
+               (loop (cdr args)))
               (else
                (let ((egg (string->symbol (car args))))
                  (unless (memq egg eggs)
@@ -386,20 +414,25 @@
   (when (null? eggs)
     (usage 1))
 
-  (printf "Using ~a as output-directory.\n" out-dir)
+  (info "Using ~a as output-directory." out-dir)
 
   (if config-file
-      (load config-file)
+      (begin
+        (info "Loading configuration file: ~a" config-file)
+        (load config-file))
       (let ((user-config (make-pathname (get-environment-variable "HOME")
                                         ".egg-layer.conf")))
         (when (file-exists? user-config)
+          (info "Loading configuration file: ~a" user-config)
           (load user-config))))
 
   (create-directory out-dir 'recursively)
   (generate-makefile eggs force-dependencies? out-dir)
   (execute-action action out-dir)
-  (unless keep-output-dir?
-    (printf "Removing ~a.\n" out-dir)
-    (delete-directory out-dir 'recursively)))
+  (if keep-output-dir?
+      (printf "Not removing ~a, as requested.\n" out-dir)
+      (begin
+        (info "Removing ~a." out-dir)
+        (delete-directory out-dir 'recursively))))
 
 ) ;; end module
