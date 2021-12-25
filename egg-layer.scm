@@ -113,7 +113,7 @@
   (apply fprintf (cons (current-error-port)
                        (cons (string-append fmt "\n") args))))
 
-(define (generate-makefile egg force-dependencies? out-dir)
+(define (generate-makefile eggs force-dependencies? out-dir)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
   (system* ((uncompress-command) egg-index-compressed-filename
             egg-index-filename))
@@ -211,14 +211,30 @@
               "CHICKEN_REPOSITORY_PATH"
               "$(shell $(CSI) -p '(begin (import chicken.platform) (car (repository-path)))')")
 
-      (printf "all: ~a\n\n" (make-target egg 'install))
+      (printf "all: ~a\n\n"
+              (string-intersperse
+               (map (lambda (egg)
+                      (make-target egg 'install))
+                    eggs)))
 
-      (let* ((entry (get-egg-entry egg egg-index))
-             (deps (get-egg-deps entry))
+      (let* ((entries (map (lambda (egg)
+                             (get-egg-entry egg egg-index))
+                           eggs))
+             (deps (let loop ((entries entries))
+                     (if (null? entries)
+                         '()
+                         (append (get-egg-deps (car entries))
+                                 (loop (cdr entries))))))
              (targets '()))
         ;; Force the installation of the egg specified on the
         ;; command line (even if it is already installed)
-        (set! targets (gen-egg-rules egg entry))
+        (set! targets
+              (let loop ((eggs eggs)
+                         (entries entries))
+                (if (null? eggs)
+                    '()
+                    (append (gen-egg-rules (car eggs) (car entries))
+                            (loop (cdr eggs) (cdr entries))))))
         (for-each (lambda (dep)
                     (get-egg-entry dep egg-index)
                     (set! targets
@@ -276,7 +292,7 @@
                  (current-output-port)
                  (current-error-port)))
         (this (pathname-strip-directory (program-name))))
-    (fprintf out "Usage: ~a [<options>] <egg>
+    (fprintf out "Usage: ~a [<options>] <egg> ...
 
 <options>
   --action|-a <action>:
@@ -317,7 +333,7 @@
       (force-dependencies? #f)
       (valid-actions '(all fetch none unpack))
       (action 'all)
-      (egg #f))
+      (eggs '()))
 
   ;; Command line parsing
   (let loop ((args args))
@@ -361,11 +377,12 @@
                (set! out-dir (cadr args))
                (loop (cddr args)))
               (else
-               (if (null? (cdr args))
-                   (set! egg (string->symbol (car args)))
-                   (usage 1)))))))
+               (let ((egg (string->symbol (car args))))
+                 (unless (memq egg eggs)
+                   (set! eggs (cons egg eggs))))
+               (loop (cdr args)))))))
 
-  (unless egg
+  (when (null? eggs)
     (usage 1))
 
   (printf "Using ~a as output-directory.\n" out-dir)
@@ -378,7 +395,7 @@
           (load user-config))))
 
   (create-directory out-dir 'recursively)
-  (generate-makefile egg force-dependencies? out-dir)
+  (generate-makefile eggs force-dependencies? out-dir)
   (execute-action action out-dir)
   (unless keep-output-dir?
     (printf "Removing ~a.\n" out-dir)

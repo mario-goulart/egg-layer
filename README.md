@@ -27,7 +27,7 @@ Usage:
 
 ```
 $ egg-layer -h
-Usage: egg-layer [<options>] <egg>
+Usage: egg-layer [<options>] <egg> ...
 
 <options>
   --action|-a <action>:
@@ -81,8 +81,6 @@ Usage: egg-layer [<options>] <egg>
 
 * It uses `chicken-install` as build system for eggs (but not to fetch
   and verify integrity of sources).
-
-* It only admits a single egg as argument.
 
 * It completely ignores egg versions.
 
