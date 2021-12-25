@@ -12,6 +12,11 @@
 (define default-repository-path
   (make-parameter (car (repository-path))))
 
+(define parallel-tasks
+  ;; The value of this parameter maps to the value of the -j parameter
+  ;; for make.  If #f, -j will be given no value.
+  (make-parameter 1))
+
 ;; External programs
 (define fetch-command
   (make-parameter

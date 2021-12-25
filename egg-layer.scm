@@ -255,8 +255,12 @@
 
 (define (execute-action action dir)
   (unless (eqv? action 'none)
+    (let ((parallelization
+           (if (parallel-tasks)
+               (sprintf " -j ~a" (parallel-tasks))
+               " -j")))
     (change-directory dir)
-    (system* (sprintf "make ~a" action))))
+    (system* (sprintf "make ~a~a" action parallelization)))))
 
 (define (usage exit-code)
   (let ((out (if (zero? exit-code)
@@ -284,6 +288,11 @@
 
   --output-dir|-o <dir>:
     Output directory (default: temporary directory with a random name)
+
+  --parallel-tasks|-j <number>:
+    The value of this parameter maps to the value of the -j parameter
+    for make.  If given a negative value, -j for make will be given no
+    value.
 " this)
     (exit exit-code)))
 
@@ -313,6 +322,16 @@
               ((member arg '("-f" "--force-dependencies"))
                (set! force-dependencies? #t)
                (loop (cdr args)))
+              ((member arg '("-j" "--parallel-tasks"))
+               (when (null? (cdr args))
+                 (die! "--parallel-tasks|-j requires an argument."))
+               (let ((val (cadr args)))
+                 (parallel-tasks
+                  (and-let* ((v (string->number val)))
+                    (if (negative? v)
+                        #f
+                        val))))
+               (loop (cddr args)))
               ((member arg '("-k" "--keep-output-dir"))
                (set! keep-output-dir? #t)
                (loop (cdr args)))
