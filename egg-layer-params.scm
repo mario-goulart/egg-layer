@@ -2,6 +2,7 @@
 
 (import scheme)
 (import (chicken base)
+        (chicken foreign)
         (chicken format)
         (chicken pathname)
         (chicken platform)
@@ -15,6 +16,16 @@
   (make-parameter 1))
 
 ;; External programs
+(define csi-program
+  (make-parameter
+   (make-pathname (list (foreign-value "C_INSTALL_PREFIX" c-string) "bin")
+                  (foreign-value "C_CSI_PROGRAM" c-string))))
+
+(define chicken-install-program
+  (make-parameter
+   (make-pathname (list (foreign-value "C_INSTALL_PREFIX" c-string) "bin")
+                  (foreign-value "C_CHICKEN_INSTALL_PROGRAM" c-string))))
+
 (define fetch-command
   (make-parameter
    (lambda (url local-file)

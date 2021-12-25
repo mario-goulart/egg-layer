@@ -195,15 +195,17 @@
                                 (cons (make-target dep 'install)
                                       (loop (cdr deps)))))))
                        (shell-unless-egg-installed egg
-                         (sprintf "(cd ~a-~a && chicken-install)"
+                         (sprintf "(cd ~a-~a && $(CHICKEN_INSTALL))"
                                   egg egg-version)))
             targets)))
 
     (with-output-to-file (make-pathname out-dir "Makefile")
       (lambda ()
+        (printf "CSI ?= ~a\n" (csi-program))
+        (printf "CHICKEN_INSTALL ?= ~a\n" (chicken-install-program))
         (printf "~a ?= ~a\n\n"
                 "CHICKEN_REPOSITORY_PATH"
-                "$(shell csi -p '(begin (import chicken.platform) (car (repository-path)))')")
+                "$(shell $(CSI) -p '(begin (import chicken.platform) (car (repository-path)))')")
 
         (printf "all: ~a\n\n" (make-target egg 'install))
 

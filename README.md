@@ -82,10 +82,6 @@ Usage: egg-layer [<options>] <egg>
 * It uses `chicken-install` as build system for eggs (but not to fetch
   and verify integrity of sources).
 
-* The generated Makefile assumes that `chicken-install` is somewhere
-  in `$PATH`.  It doesn't hardcode the full path to the
-  `chicken-install` executable in the Makefile (maybe it should).
-
 * It only admits a single egg as argument.
 
 * It completely ignores egg versions.
