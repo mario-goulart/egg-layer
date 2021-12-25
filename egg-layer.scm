@@ -196,7 +196,7 @@
                      (list (make-target egg 'checksum))
                      (make-info egg "Unpacking")
                      (shell-unless-egg-installed egg
-                       ((extract-command) egg-tarball-filename)))
+                       ((extract-command) egg egg-tarball-filename)))
 
           (add-target! (make-target egg 'install) 'install #t)
           (make-rule (make-target egg 'install)

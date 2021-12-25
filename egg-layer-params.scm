@@ -2,6 +2,7 @@
 
 (import scheme)
 (import (chicken base)
+        (chicken irregex)
         (chicken foreign)
         (chicken format)
         (chicken pathname)
@@ -33,8 +34,20 @@
 
 (define extract-command
   (make-parameter
-   (lambda (tarball)
-     (sprintf "tar -xzf ~a" (qs tarball)))))
+   (lambda (egg tarball)
+     ;; This is horrible, but we have to generate a VERSION file,
+     ;; otherwise chicken-install won't know the version of the egg.
+     (let* ((egg (symbol->string egg))
+            (version
+             (irregex-match-substring
+              (irregex-search
+               `(: (* any) ,egg "-" (=> version (+ any)) ".tar.gz" eol)
+               tarball)
+              'version)))
+       (sprintf "{ tar -xzf ~a && echo '\"~a\"' > ~a/VERSION; }"
+                (qs tarball)
+                (qs version)
+                (irregex-replace `(: ".tar.gz" eol) tarball ""))))))
 
 (define uncompress-command
   (make-parameter
