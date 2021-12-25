@@ -111,7 +111,8 @@
 
 (define (die! fmt . args)
   (apply fprintf (cons (current-error-port)
-                       (cons (string-append fmt "\n") args))))
+                       (cons (string-append fmt "\n") args)))
+  (exit 1))
 
 (define (generate-makefile eggs force-dependencies? out-dir)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
