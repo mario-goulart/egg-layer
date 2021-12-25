@@ -1,6 +1,6 @@
 ;;; egg-layer.egg -*- scheme -*-
 
-((synopsis "egg-layer")
+((synopsis "Wrapper around chicken-install to install eggs")
  (author "Mario Domenech Goulart")
  (license "BSD")
  (category tools)
