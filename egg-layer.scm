@@ -2,6 +2,7 @@
 
 (import scheme)
 (import (chicken base)
+        (chicken condition)
         (chicken file)
         (chicken format)
         (chicken io)
@@ -121,7 +122,7 @@
     (apply fprintf (cons (current-output-port)
                          (cons (string-append fmt "\n") args)))))
 
-(define (generate-makefile eggs force-dependencies? out-dir)
+(define (generate-makefile eggs force-dependencies? out-dir log-dir)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
   (system* ((uncompress-command) egg-index-compressed-filename
             egg-index-filename))
@@ -144,7 +145,7 @@
               (if force-dependencies?
                   shell-exp
                   (shell-or (shell-egg-installed? egg) shell-exp))
-              (if verbose? "" "$(QUIET)"))))
+              (if verbose? "" "$(LOG)"))))
 
   (define (make-info egg message)
     (sprintf "@echo [~a] ~a" egg message))
@@ -225,7 +226,9 @@
 
   (with-output-to-file (make-pathname out-dir "Makefile")
     (lambda ()
-      (printf "QUIET ?= ~a\n" (if verbose? "''" ">/dev/null 2>&1"))
+      (printf "LOG = ~a\n" (if verbose?
+                               (sprintf "2>&1 | tee ~a/$(@).log" log-dir)
+                               (sprintf ">~a/$(@).log 2>&1" log-dir)))
       (when verbose?
         (printf "CSC_OPTIONS ?= -verbose\n"))
       (printf "CSI ?= ~a\n" (csi-program))
@@ -301,14 +304,21 @@
                              (loop (cdr targets))))))))
         ))))
 
-(define (execute-action action dir)
+(define (execute-action action dir log-dir)
   (unless (eqv? action 'none)
     (let ((parallelization
            (if (parallel-tasks)
                (sprintf " -j ~a" (parallel-tasks))
                " -j")))
-    (change-directory dir)
-    (system* (sprintf "make ~a~a" action parallelization)))))
+      (change-directory dir)
+      (handle-exceptions exn
+        (with-output-to-port (current-error-port)
+          (lambda ()
+            (print-error-message exn)
+            (printf "See the full log for the task which failed in ~a\n"
+                    log-dir)
+            (exit 1)))
+        (system* (sprintf "make ~a~a" action parallelization))))))
 
 (define (usage exit-code)
   (let ((out (if (zero? exit-code)
@@ -434,13 +444,14 @@
   (unless (eq? ntasks unset)
     (parallel-tasks ntasks))
 
-  (create-directory out-dir 'recursively)
-  (generate-makefile eggs force-dependencies? out-dir)
-  (execute-action action out-dir)
-  (if keep-output-dir?
-      (printf "Sources of eggs and Makefile written into ~a\n" out-dir)
-      (begin
-        (info "Removing ~a." out-dir)
-        (delete-directory out-dir 'recursively))))
+  (let ((log-dir (make-pathname out-dir "log")))
+    (create-directory log-dir 'recursively)
+    (generate-makefile eggs force-dependencies? out-dir log-dir)
+    (execute-action action out-dir log-dir)
+    (if keep-output-dir?
+        (printf "Sources of eggs and Makefile written into ~a\n" out-dir)
+        (begin
+          (info "Removing ~a." out-dir)
+          (delete-directory out-dir 'recursively)))))
 
 ) ;; end module
