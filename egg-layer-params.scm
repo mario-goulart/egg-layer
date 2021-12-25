@@ -4,9 +4,13 @@
 (import (chicken base)
         (chicken format)
         (chicken pathname)
+        (chicken platform)
         (chicken process))
 
 (define chicken-major-version 5)
+
+(define default-repository-path
+  (make-parameter (car (repository-path))))
 
 ;; External programs
 (define fetch-command

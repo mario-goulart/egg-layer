@@ -67,10 +67,6 @@ Usage example:
   in `$PATH`.  It doesn't hardcode the full path to the
   `chicken-install` executable in the Makefile (maybe it should).
 
-* When generating the Makefile, `egg-layer` skips eggs already
-  installed.  The state of the repo might be different when the
-  Makefile is actually processed.
-
 * It only admits a single egg as argument.
 
 * It completely ignores egg versions.

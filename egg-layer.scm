@@ -9,7 +9,6 @@ exec csi -s $0 "$@"
         (chicken io)
         (chicken irregex)
         (chicken pathname)
-        (chicken platform)
         (chicken port)
         (chicken pretty-print)
         (chicken process)
@@ -87,11 +86,6 @@ exec csi -s $0 "$@"
                 actions)
            "\n")))
 
-(define (egg-installed? egg)
-  ;; egg is a symbol
-  (file-exists?
-   (make-pathname (repository-path) (symbol->string egg) "egg-info")))
-
 (define (filter-tasks targets task)
   ;; targets is a list of (target task phony?) elements
   (let loop ((targets targets))
@@ -106,6 +100,18 @@ exec csi -s $0 "$@"
 (define (ppe thing)
   (with-output-to-port (current-error-port)
     (cut pp thing)))
+
+(define (shell-egg-installed? egg)
+  ;; egg is a symbol
+  (sprintf "[ -e ~a ]"
+           (qs (make-pathname "$(CHICKEN_REPOSITORY_PATH)"
+                              (symbol->string egg) "egg-info"))))
+
+(define (shell-or shell-exp1 shell-exp2)
+  (sprintf "~a || ~a" shell-exp1 shell-exp2))
+
+(define (shell-unless-egg-installed egg shell-exp)
+  (shell-or (shell-egg-installed? egg) shell-exp))
 
 (define (die! fmt . args)
   (apply fprintf (cons (current-error-port)
@@ -165,11 +171,11 @@ exec csi -s $0 "$@"
     (define (visited? egg)
       (memq egg visited))
 
-    (define (gen-egg-rules egg entry #!optional force-install?)
+    (define (gen-egg-rules egg entry)
       ;; FIXME: this is a mess.  This procedure prints make rules and
       ;; returns a list of (target task phony?) elements.
-      (if (and (not (visited? egg))
-               (or force-install? (not (egg-installed? egg))))
+      (if (visited? egg)
+          '()
           (let* ((egg-version (get-egg-version entry))
                  (egg-tarball-filename (sprintf "~a-~a.tar.gz"
                                                 egg egg-version))
@@ -185,27 +191,31 @@ exec csi -s $0 "$@"
 
             (add-target! egg-tarball-filename 'fetch-tarball #f)
             (make-rule egg-tarball-filename '()
-                       ((fetch-command)
-                        ((egg-tarball-url) egg egg-tarball-filename)
-                        egg-tarball-filename))
+                       (shell-unless-egg-installed egg
+                         ((fetch-command)
+                          ((egg-tarball-url) egg egg-tarball-filename)
+                          egg-tarball-filename)))
 
             (add-target! egg-checksum-file 'fetch-checksum #f)
             (make-rule egg-checksum-file '()
-                       ((fetch-command)
-                        ((egg-tarball-url)
-                         egg
-                         (string-append egg-tarball-filename ".sha1"))
-                        egg-checksum-file))
+                       (shell-unless-egg-installed egg
+                         ((fetch-command)
+                          ((egg-tarball-url)
+                           egg
+                           (string-append egg-tarball-filename ".sha1"))
+                          egg-checksum-file)))
 
             (add-target! (make-target egg 'checksum) 'checksum #t)
             (make-rule (make-target egg 'checksum)
                        (list egg-tarball-filename egg-checksum-file)
-                       ((checksum-command) egg-checksum-file))
+                       (shell-unless-egg-installed egg
+                         ((checksum-command) egg-checksum-file)))
 
             (add-target! egg-unpacked-dir 'unpack #f)
             (make-rule egg-unpacked-dir
                        (list (make-target egg 'checksum))
-                       ((extract-command) egg-tarball-filename))
+                       (shell-unless-egg-installed egg
+                         ((extract-command) egg-tarball-filename)))
 
             (add-target! (make-target egg 'install) 'install #t)
             (make-rule (make-target egg 'install)
@@ -215,28 +225,26 @@ exec csi -s $0 "$@"
                           (if (null? deps)
                               '()
                               (let ((dep (car deps)))
-                                (cond
-                                 ((egg-installed? dep)
-                                  (loop (cdr deps)))
-                                 (else
-                                  (unless (visited? dep)
-                                    (set! targets
-                                          (append
-                                           targets
-                                           (gen-egg-rules
-                                            dep
-                                            (get-egg-entry dep egg-index))))
-                                    (add-to-visited! dep))
-                                  (add-target! (make-target dep 'install) 'install #t)
-                                  (cons (make-target dep 'install)
-                                        (loop (cdr deps)))))))))
-                       (sprintf "(cd ~a-~a && chicken-install)"
-                                egg egg-version))
-            targets)
-          '()))
+                                (unless (visited? dep)
+                                  (set! targets
+                                        (append
+                                         targets
+                                         (gen-egg-rules
+                                          dep
+                                          (get-egg-entry dep egg-index))))
+                                  (add-to-visited! dep))
+                                (add-target! (make-target dep 'install) 'install #t)
+                                (cons (make-target dep 'install)
+                                      (loop (cdr deps)))))))
+                       (shell-unless-egg-installed egg
+                         (sprintf "(cd ~a-~a && chicken-install)"
+                                  egg egg-version)))
+            targets)))
 
     (with-output-to-file "Makefile"
       (lambda ()
+        (printf "CHICKEN_REPOSITORY_PATH = ~a\n\n" (default-repository-path))
+
         (printf "all: ~a\n\n" (make-target egg 'install))
 
         (let* ((entry (get-egg-entry egg egg-index))
@@ -244,7 +252,7 @@ exec csi -s $0 "$@"
                (targets '()))
           ;; Force the installation of the egg specified on the
           ;; command line (even if it is already installed)
-          (set! targets (gen-egg-rules egg entry 'force-install))
+          (set! targets (gen-egg-rules egg entry))
           (for-each (lambda (dep)
                       (get-egg-entry dep egg-index)
                       (set! targets
