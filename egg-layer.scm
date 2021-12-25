@@ -114,149 +114,153 @@
                        (cons (string-append fmt "\n") args))))
 
 (define (generate-makefile egg force-dependencies? out-dir)
-  (let* ((egg-index (read-egg-index egg-index-filename))
-         (entry (get-egg-entry egg egg-index))
-         (visited '()))
+  (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
+  (system* ((uncompress-command) egg-index-compressed-filename
+            egg-index-filename))
+  (delete-file egg-index-compressed-filename)
 
-    (define (shell-unless-egg-installed egg shell-exp)
-      (if force-dependencies?
-          shell-exp
-          (shell-or (shell-egg-installed? egg) shell-exp)))
+  (define egg-index (read-egg-index egg-index-filename))
 
-    (define (add-to-visited! egg)
-      (set! visited (cons egg visited)))
+  (define visited '())
 
-    (define (visited? egg)
-      (memq egg visited))
+  (define (add-to-visited! egg)
+    (set! visited (cons egg visited)))
 
-    (define (gen-egg-rules egg entry)
-      ;; FIXME: this is a mess.  This procedure prints make rules and
-      ;; returns a list of (target task phony?) elements.
-      (if (visited? egg)
-          '()
-          (let* ((egg-version (get-egg-version entry))
-                 (egg-tarball-filename (sprintf "~a-~a.tar.gz"
-                                                egg egg-version))
-                 (egg-checksum-file (sprintf "~a.sha1" egg-tarball-filename))
-                 (deps (get-egg-deps entry))
-                 (egg-unpacked-dir (sprintf "~a-~a" egg egg-version))
-                 (targets '()))
+  (define (visited? egg)
+    (memq egg visited))
 
-            (add-to-visited! egg)
+  (define (shell-unless-egg-installed egg shell-exp)
+    (if force-dependencies?
+        shell-exp
+        (shell-or (shell-egg-installed? egg) shell-exp)))
 
-            (define (add-target! target task phony?)
-              (set! targets (cons (list target task phony?) targets)))
-
-            (add-target! egg-tarball-filename 'fetch-tarball #f)
-            (make-rule egg-tarball-filename '()
-                       (shell-unless-egg-installed egg
-                         ((fetch-command)
-                          ((egg-tarball-url) egg egg-tarball-filename)
-                          egg-tarball-filename)))
-
-            (add-target! egg-checksum-file 'fetch-checksum #f)
-            (make-rule egg-checksum-file '()
-                       (shell-unless-egg-installed egg
-                         ((fetch-command)
-                          ((egg-tarball-url)
-                           egg
-                           (string-append egg-tarball-filename ".sha1"))
-                          egg-checksum-file)))
-
-            (add-target! (make-target egg 'checksum) 'checksum #t)
-            (make-rule (make-target egg 'checksum)
-                       (list egg-tarball-filename egg-checksum-file)
-                       (shell-unless-egg-installed egg
-                         ((checksum-command) egg-checksum-file)))
-
-            (add-target! egg-unpacked-dir 'unpack #f)
-            (make-rule egg-unpacked-dir
-                       (list (make-target egg 'checksum))
-                       (shell-unless-egg-installed egg
-                         ((extract-command) egg-tarball-filename)))
-
-            (add-target! (make-target egg 'install) 'install #t)
-            (make-rule (make-target egg 'install)
-                       (cons
-                        egg-unpacked-dir
-                        (let loop ((deps deps))
-                          (if (null? deps)
-                              '()
-                              (let ((dep (car deps)))
-                                (unless (visited? dep)
-                                  (set! targets
-                                        (append
-                                         targets
-                                         (gen-egg-rules
-                                          dep
-                                          (get-egg-entry dep egg-index))))
-                                  (add-to-visited! dep))
-                                (add-target! (make-target dep 'install) 'install #t)
-                                (cons (make-target dep 'install)
-                                      (loop (cdr deps)))))))
-                       (shell-unless-egg-installed egg
-                         (sprintf "(cd ~a-~a && $(CHICKEN_INSTALL))"
-                                  egg egg-version)))
-            targets)))
-
-    (with-output-to-file (make-pathname out-dir "Makefile")
-      (lambda ()
-        (printf "CSI ?= ~a\n" (csi-program))
-        (printf "CHICKEN_INSTALL ?= ~a\n" (chicken-install-program))
-        (printf "~a ?= ~a\n\n"
-                "CHICKEN_REPOSITORY_PATH"
-                "$(shell $(CSI) -p '(begin (import chicken.platform) (car (repository-path)))')")
-
-        (printf "all: ~a\n\n" (make-target egg 'install))
-
-        (let* ((entry (get-egg-entry egg egg-index))
+  (define (gen-egg-rules egg entry)
+    ;; FIXME: this is a mess.  This procedure prints make rules and
+    ;; returns a list of (target task phony?) elements.
+    (if (visited? egg)
+        '()
+        (let* ((egg-version (get-egg-version entry))
+               (egg-tarball-filename (sprintf "~a-~a.tar.gz" egg egg-version))
+               (egg-checksum-file (sprintf "~a.sha1" egg-tarball-filename))
                (deps (get-egg-deps entry))
+               (egg-unpacked-dir (sprintf "~a-~a" egg egg-version))
                (targets '()))
-          ;; Force the installation of the egg specified on the
-          ;; command line (even if it is already installed)
-          (set! targets (gen-egg-rules egg entry))
-          (for-each (lambda (dep)
-                      (get-egg-entry dep egg-index)
-                      (set! targets
-                            (append
-                             targets
-                             (gen-egg-rules dep (get-egg-entry dep egg-index)))))
-                    deps)
 
-          ;; Extra targets
-          (printf "fetch: ~a\n\n"
-                  (string-intersperse (filter-tasks targets 'checksum)))
+          (add-to-visited! egg)
 
-          (printf "unpack: ~a\n\n"
-                  (string-intersperse (filter-tasks targets 'unpack)))
+          (define (add-target! target task phony?)
+            (set! targets (cons (list target task phony?) targets)))
 
-          (print "clean:")
-          (for-each
-           (lambda (file)
-             (print "\trm -rf " file))
-           (append
-            (filter-tasks targets 'fetch-tarball)
-            (filter-tasks targets 'fetch-checksum)
-            (filter-tasks targets 'unpack)))
-          (newline)
+          (add-target! egg-tarball-filename 'fetch-tarball #f)
+          (make-rule egg-tarball-filename '()
+                     (shell-unless-egg-installed egg
+                       ((fetch-command)
+                        ((egg-tarball-url) egg egg-tarball-filename)
+                        egg-tarball-filename)))
 
-          (print "help:")
-          (print "\t@echo 'all: install the egg given as argument to egg-layer and its dependencies'")
-          (print "\t@echo 'fetch: fetch all egg tarballs'")
-          (print "\t@echo 'unpack: unpack all egg tarballs'")
-          (print "\t@echo 'clean: remove all egg tarballs, checksum files and egg directories'")
-          (newline)
+          (add-target! egg-checksum-file 'fetch-checksum #f)
+          (make-rule egg-checksum-file '()
+                     (shell-unless-egg-installed egg
+                       ((fetch-command)
+                        ((egg-tarball-url)
+                         egg
+                         (string-append egg-tarball-filename ".sha1"))
+                        egg-checksum-file)))
 
-          (printf ".PHONY: all clean help fetch unpack ~a\n"
-                  (string-intersperse
-                   (let loop ((targets targets))
-                     (if (null? targets)
-                         '()
-                         (let ((target (car targets)))
-                           (if (caddr target) ;; phony?
-                               (cons (car target) (loop (cdr targets)))
-                               (loop (cdr targets))))))))
-          )))))
+          (add-target! (make-target egg 'checksum) 'checksum #t)
+          (make-rule (make-target egg 'checksum)
+                     (list egg-tarball-filename egg-checksum-file)
+                     (shell-unless-egg-installed egg
+                       ((checksum-command) egg-checksum-file)))
+
+          (add-target! egg-unpacked-dir 'unpack #f)
+          (make-rule egg-unpacked-dir
+                     (list (make-target egg 'checksum))
+                     (shell-unless-egg-installed egg
+                       ((extract-command) egg-tarball-filename)))
+
+          (add-target! (make-target egg 'install) 'install #t)
+          (make-rule (make-target egg 'install)
+                     (cons
+                      egg-unpacked-dir
+                      (let loop ((deps deps))
+                        (if (null? deps)
+                            '()
+                            (let ((dep (car deps)))
+                              (unless (visited? dep)
+                                (set! targets
+                                      (append
+                                       targets
+                                       (gen-egg-rules
+                                        dep
+                                        (get-egg-entry dep egg-index))))
+                                (add-to-visited! dep))
+                              (add-target! (make-target dep 'install) 'install #t)
+                              (cons (make-target dep 'install)
+                                    (loop (cdr deps)))))))
+                     (shell-unless-egg-installed egg
+                       (sprintf "(cd ~a-~a && $(CHICKEN_INSTALL))"
+                                egg egg-version)))
+          targets)))
+
+  (with-output-to-file (make-pathname out-dir "Makefile")
+    (lambda ()
+      (printf "CSI ?= ~a\n" (csi-program))
+      (printf "CHICKEN_INSTALL ?= ~a\n" (chicken-install-program))
+      (printf "~a ?= ~a\n\n"
+              "CHICKEN_REPOSITORY_PATH"
+              "$(shell $(CSI) -p '(begin (import chicken.platform) (car (repository-path)))')")
+
+      (printf "all: ~a\n\n" (make-target egg 'install))
+
+      (let* ((entry (get-egg-entry egg egg-index))
+             (deps (get-egg-deps entry))
+             (targets '()))
+        ;; Force the installation of the egg specified on the
+        ;; command line (even if it is already installed)
+        (set! targets (gen-egg-rules egg entry))
+        (for-each (lambda (dep)
+                    (get-egg-entry dep egg-index)
+                    (set! targets
+                          (append
+                           targets
+                           (gen-egg-rules dep (get-egg-entry dep egg-index)))))
+                  deps)
+
+        ;; Extra targets
+        (printf "fetch: ~a\n\n"
+                (string-intersperse (filter-tasks targets 'checksum)))
+
+        (printf "unpack: ~a\n\n"
+                (string-intersperse (filter-tasks targets 'unpack)))
+
+        (print "clean:")
+        (for-each
+         (lambda (file)
+           (print "\trm -rf " file))
+         (append
+          (filter-tasks targets 'fetch-tarball)
+          (filter-tasks targets 'fetch-checksum)
+          (filter-tasks targets 'unpack)))
+        (newline)
+
+        (print "help:")
+        (print "\t@echo 'all: install the egg given as argument to egg-layer and its dependencies'")
+        (print "\t@echo 'fetch: fetch all egg tarballs'")
+        (print "\t@echo 'unpack: unpack all egg tarballs'")
+        (print "\t@echo 'clean: remove all egg tarballs, checksum files and egg directories'")
+        (newline)
+
+        (printf ".PHONY: all clean help fetch unpack ~a\n"
+                (string-intersperse
+                 (let loop ((targets targets))
+                   (if (null? targets)
+                       '()
+                       (let ((target (car targets)))
+                         (if (caddr target) ;; phony?
+                             (cons (car target) (loop (cdr targets)))
+                             (loop (cdr targets))))))))
+        ))))
 
 (define (execute-action action dir)
   (unless (eqv? action 'none)
@@ -374,10 +378,6 @@
           (load user-config))))
 
   (create-directory out-dir 'recursively)
-  (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
-  (system* ((uncompress-command) egg-index-compressed-filename
-                                 egg-index-filename))
-  (delete-file egg-index-compressed-filename)
   (generate-makefile egg force-dependencies? out-dir)
   (execute-action action out-dir)
   (unless keep-output-dir?
