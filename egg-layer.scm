@@ -152,7 +152,7 @@
               (if verbose? "" "$(LOG)"))))
 
   (define (make-info egg message)
-    (sprintf "echo [~a] ~a" egg message))
+    (sprintf "echo '[~a] ~a'" egg message))
 
   (define (gen-egg-rules egg entry)
     ;; FIXME: this is a mess.  This procedure prints make rules and
