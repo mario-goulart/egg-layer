@@ -159,7 +159,7 @@
   (when verbose?
     (printer (current-output-port) fmt args)))
 
-(define (generate-makefile eggs force-dependencies? local-egg? local-egg-dir out-dir)
+(define (generate-makefile eggs force-dependencies? local-egg out-dir)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
   (system* ((uncompress-command) egg-index-compressed-filename
             egg-index-filename))
@@ -168,7 +168,7 @@
   (define egg-index (read-egg-index egg-index-filename))
 
   (define local-egg-entries '())
-  (when local-egg?
+  (when local-egg
     (set! local-egg-entries
           (list (build-entry-for-local-egg (find-egg-file))))
     (set! eggs (list (caar local-egg-entries))))
@@ -191,7 +191,7 @@
   (define (make-info egg message)
     (sprintf "echo '[~a] ~a'" egg message))
 
-  (define (gen-egg-rules egg entry local-egg?)
+  (define (gen-egg-rules egg entry local-egg)
     ;; FIXME: this is a mess.  This procedure prints make rules and
     ;; returns a list of (target task phony?) elements.
     (if (visited? egg)
@@ -208,7 +208,7 @@
           (define (add-target! target task phony?)
             (set! targets (cons (list target task phony?) targets)))
 
-          (unless local-egg?
+          (unless local-egg
             (add-target! egg-tarball-filename 'fetch-tarball #f)
             (make-rule egg-tarball-filename '()
                        (shell-unless-egg-installed egg
@@ -244,7 +244,7 @@
                         (shell-group
                          (make-info egg "Unpacking")
                          ((extract-command) egg egg-tarball-filename))))
-            ) ;; local-egg?
+            ) ;; local-egg
 
           (add-target! (make-target egg 'install) 'install #t)
           (make-rule (make-target egg 'install)
@@ -265,25 +265,25 @@
                                     (add-target! (make-target dep 'install) 'install #t)
                                     (cons (make-target dep 'install)
                                           (loop (cdr deps))))))))
-                       (if local-egg?
+                       (if local-egg
                            deps
                            (cons egg-unpacked-dir deps)))
                      (let ((shell-code
                             (shell-group
                              (make-info egg "Building and installing")
-                             (let ((src-dir (if local-egg?
+                             (let ((src-dir (if local-egg
                                                 "$(LOCAL_EGG_DIR)"
                                                 (sprintf "~a-~a" egg egg-version))))
                                (sprintf "(cd ~a && $(CHICKEN_INSTALL))" src-dir)))))
-                       (if local-egg?
+                       (if local-egg
                            (sprintf "~a~a" (if verbose? "" "@") shell-code)
                            (shell-unless-egg-installed egg shell-code))))
           targets)))
 
   (with-output-to-file (make-pathname out-dir "Makefile")
     (lambda ()
-      (when local-egg?
-        (printf "LOCAL_EGG_DIR ?= ~a\n" local-egg-dir))
+      (when local-egg
+        (printf "LOCAL_EGG_DIR ?= ~a\n" local-egg))
       (when verbose?
         (printf "CSC_OPTIONS ?= -verbose\n"))
       (printf "CSI ?= ~a\n" (csi-program))
@@ -298,7 +298,7 @@
                       (make-target egg 'install))
                     eggs)))
 
-      (let* ((entries (if local-egg?
+      (let* ((entries (if local-egg
                           local-egg-entries
                           (map (lambda (egg)
                                  (get-egg-entry egg egg-index))
@@ -314,7 +314,7 @@
                          (entries entries))
                 (if (null? eggs)
                     '()
-                    (append (gen-egg-rules (car eggs) (car entries) local-egg?)
+                    (append (gen-egg-rules (car eggs) (car entries) local-egg)
                             (loop (cdr eggs) (cdr entries))))))
         (for-each (lambda (dep)
                     (get-egg-entry dep egg-index)
@@ -497,13 +497,14 @@ the source directory of an egg.
   (unless (eq? ntasks unset)
     (parallel-tasks ntasks))
 
-  (create-directory out-dir 'recursively)
-  (generate-makefile eggs force-dependencies? (null? eggs) (current-directory) out-dir)
-  (execute-action action out-dir)
-  (if keep-output-dir?
-      (printf "Sources of eggs and Makefile written into ~a\n" out-dir)
-      (begin
-        (info "Removing ~a." out-dir)
-        (delete-directory out-dir 'recursively))))
+  (let ((local-egg (and (null? eggs) (current-directory))))
+    (create-directory out-dir 'recursively)
+    (generate-makefile eggs force-dependencies? local-egg out-dir)
+    (execute-action action out-dir)
+    (if keep-output-dir?
+        (printf "Sources of eggs and Makefile written into ~a\n" out-dir)
+        (begin
+          (info "Removing ~a." out-dir)
+          (delete-directory out-dir 'recursively)))))
 
 ) ;; end module
