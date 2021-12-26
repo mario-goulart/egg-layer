@@ -2,7 +2,7 @@
 
 (import scheme)
 (import (chicken base)
-        (chicken condition)
+        (chicken bitwise)
         (chicken file)
         (chicken format)
         (chicken io)
@@ -315,12 +315,9 @@
                (sprintf " -j ~a" (parallel-tasks))
                " -j")))
       (change-directory dir)
-      (handle-exceptions exn
-        (with-output-to-port (current-error-port)
-          (lambda ()
-            (print-error-message exn)
-            (exit 1)))
-        (system* (sprintf "make ~a~a" action parallelization))))))
+      (let ((status (system (sprintf "make ~a~a" action parallelization))))
+        (unless (zero? status)
+          (exit (arithmetic-shift status -8)))))))
 
 (define (usage exit-code)
   (let ((out (if (zero? exit-code)
