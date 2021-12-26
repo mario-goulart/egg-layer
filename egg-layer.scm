@@ -77,7 +77,7 @@
   (sprintf "task_~a_~a" egg task))
 
 (define (make-rule target deps . actions)
-  (printf "~a: prepare~a\n~a\n\n"
+  (printf "~a:~a\n~a\n\n"
           target
           (if (null? deps)
               ""
@@ -126,7 +126,7 @@
   (when verbose?
     (printer (current-output-port) fmt args)))
 
-(define (generate-makefile eggs force-dependencies? out-dir log-dir)
+(define (generate-makefile eggs force-dependencies? out-dir)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
   (system* ((uncompress-command) egg-index-compressed-filename
             egg-index-filename))
@@ -145,11 +145,9 @@
   (define (shell-unless-egg-installed egg shell-exp)
     (string-append
      (if verbose? "" "@")
-     (sprintf "~a ~a"
-              (if force-dependencies?
-                  shell-exp
-                  (shell-or (shell-egg-installed? egg) shell-exp))
-              (if verbose? "" "$(LOG)"))))
+     (if force-dependencies?
+         shell-exp
+         (shell-or (shell-egg-installed? egg) shell-exp))))
 
   (define (make-info egg message)
     (sprintf "echo '[~a] ~a'" egg message))
@@ -235,9 +233,6 @@
 
   (with-output-to-file (make-pathname out-dir "Makefile")
     (lambda ()
-      (printf "LOG = ~a\n" (if verbose?
-                               (sprintf "2>&1 | tee ~a/$(@).log" log-dir)
-                               (sprintf ">~a/$(@).log 2>&1" log-dir)))
       (when verbose?
         (printf "CSC_OPTIONS ?= -verbose\n"))
       (printf "CSI ?= ~a\n" (csi-program))
@@ -251,10 +246,6 @@
                (map (lambda (egg)
                       (make-target egg 'install))
                     eggs)))
-
-      (printf "prepare:\n\t~amkdir -p ~a\n\n"
-              (if verbose? "" "@")
-              (qs log-dir))
 
       (let* ((entries (map (lambda (egg)
                              (get-egg-entry egg egg-index))
@@ -306,7 +297,7 @@
         (print "\t@echo 'clean: remove all egg tarballs, checksum files and egg directories'")
         (newline)
 
-        (printf ".PHONY: all clean help fetch prepare unpack ~a\n"
+        (printf ".PHONY: all clean help fetch unpack ~a\n"
                 (string-intersperse
                  (let loop ((targets targets))
                    (if (null? targets)
@@ -317,7 +308,7 @@
                              (loop (cdr targets))))))))
         ))))
 
-(define (execute-action action dir log-dir)
+(define (execute-action action dir)
   (unless (eqv? action 'none)
     (let ((parallelization
            (if (parallel-tasks)
@@ -328,8 +319,6 @@
         (with-output-to-port (current-error-port)
           (lambda ()
             (print-error-message exn)
-            (printf "See the full log for the task which failed in ~a\n"
-                    log-dir)
             (exit 1)))
         (system* (sprintf "make ~a~a" action parallelization))))))
 
@@ -457,14 +446,13 @@
   (unless (eq? ntasks unset)
     (parallel-tasks ntasks))
 
-  (let ((log-dir (make-pathname out-dir "log")))
-    (create-directory log-dir 'recursively)
-    (generate-makefile eggs force-dependencies? out-dir log-dir)
-    (execute-action action out-dir log-dir)
-    (if keep-output-dir?
-        (printf "Sources of eggs and Makefile written into ~a\n" out-dir)
-        (begin
-          (info "Removing ~a." out-dir)
-          (delete-directory out-dir 'recursively)))))
+  (create-directory out-dir 'recursively)
+  (generate-makefile eggs force-dependencies? out-dir)
+  (execute-action action out-dir)
+  (if keep-output-dir?
+      (printf "Sources of eggs and Makefile written into ~a\n" out-dir)
+      (begin
+        (info "Removing ~a." out-dir)
+        (delete-directory out-dir 'recursively))))
 
 ) ;; end module
