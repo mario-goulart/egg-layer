@@ -416,7 +416,7 @@ the source directory of an egg.
 
 
 (let* ((args (command-line-arguments))
-       (out-dir (create-temporary-directory))
+       (out-dir #f)
        (config-file #f)
        (keep-output-dir? #f)
        (unset (list 'unset))
@@ -477,6 +477,9 @@ the source directory of an egg.
                  (unless (memq egg eggs)
                    (set! eggs (cons egg eggs))))
                (loop (cdr args)))))))
+
+  (unless out-dir
+    (set! out-dir (create-temporary-directory)))
 
   (info "Using ~a as output-directory." out-dir)
 
