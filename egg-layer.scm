@@ -10,7 +10,6 @@
         (chicken load)
         (chicken pathname)
         (chicken port)
-        (chicken pretty-print)
         (chicken process)
         (chicken process-context)
         (chicken sort)
@@ -100,10 +99,6 @@
               (cons (car target)
                     (loop (cdr targets)))
               (loop (cdr targets)))))))
-
-(define (ppe thing)
-  (with-output-to-port (current-error-port)
-    (cut pp thing)))
 
 (define (shell-egg-installed? egg)
   ;; egg is a symbol
