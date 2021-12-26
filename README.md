@@ -27,7 +27,10 @@ Usage:
 
 ```
 $ egg-layer -h
-Usage: egg-layer [<options>] <egg> ...
+Usage: egg-layer [<options>] [<egg> ...]
+
+If no egg is provided as argument, the current directory is assumed to be
+the source directory of an egg.
 
 <options>
   --action|-a <action>:

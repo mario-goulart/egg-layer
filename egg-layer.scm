@@ -40,6 +40,34 @@
        (list-ref entry 4)))
 (define (get-egg-test-deps entry) (list-ref entry 5))
 
+(define (get-egg-dependencies meta-data)
+  ;; Return (values <build depends> <test depends>)
+  (define (maybe-string->symbol obj)
+    (if (string? obj)
+        (string->symbol obj)
+        obj))
+  (define (deps key)
+    (or (and-let* ((d (assq key meta-data)))
+          (cdr d))
+        '()))
+  (values (map maybe-string->symbol
+               (append (deps 'dependencies)
+                       (deps 'build-dependencies)))
+          (map maybe-string->symbol
+               (deps 'test-dependencies))))
+
+(define (build-entry-for-local-egg egg-file)
+  (let ((egg-name (string->symbol (pathname-file egg-file))))
+    (let-values (((build-deps test-deps)
+                  (get-egg-dependencies
+                   (with-input-from-file egg-file read))))
+      (list egg-name
+            "unknown"  ;; version
+            0          ;; tarball size
+            "deadbeef" ;; tarball SHA1 sum
+            build-deps
+            test-deps))))
+
 ;; From setup-api (chicken-4.13.0)
 (define (version>=? v1 v2)
   (define (version->list v)
@@ -100,6 +128,14 @@
                     (loop (cdr targets)))
               (loop (cdr targets)))))))
 
+(define (find-egg-file)
+  (let ((egg-files (glob "*.egg")))
+    (when (null? egg-files)
+      (exit 0))
+    (unless (null? (cdr egg-files))
+      (die! "Multiple egg files found: ~a" egg-files))
+    (car egg-files)))
+
 (define (shell-egg-installed? egg)
   ;; egg is a symbol
   (sprintf "[ -e ~a ]"
@@ -123,13 +159,19 @@
   (when verbose?
     (printer (current-output-port) fmt args)))
 
-(define (generate-makefile eggs force-dependencies? out-dir)
+(define (generate-makefile eggs force-dependencies? local-egg? local-egg-dir out-dir)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
   (system* ((uncompress-command) egg-index-compressed-filename
             egg-index-filename))
   (delete-file egg-index-compressed-filename)
 
   (define egg-index (read-egg-index egg-index-filename))
+
+  (define local-egg-entries '())
+  (when local-egg?
+    (set! local-egg-entries
+          (list (build-entry-for-local-egg (find-egg-file))))
+    (set! eggs (list (caar local-egg-entries))))
 
   (define visited '())
 
@@ -149,7 +191,7 @@
   (define (make-info egg message)
     (sprintf "echo '[~a] ~a'" egg message))
 
-  (define (gen-egg-rules egg entry)
+  (define (gen-egg-rules egg entry local-egg?)
     ;; FIXME: this is a mess.  This procedure prints make rules and
     ;; returns a list of (target task phony?) elements.
     (if (visited? egg)
@@ -166,70 +208,82 @@
           (define (add-target! target task phony?)
             (set! targets (cons (list target task phony?) targets)))
 
-          (add-target! egg-tarball-filename 'fetch-tarball #f)
-          (make-rule egg-tarball-filename '()
-                     (shell-unless-egg-installed egg
-                      (shell-group
-                       (make-info egg "Fetching")
-                       ((fetch-command)
-                        ((egg-tarball-url) egg egg-tarball-filename)
-                        egg-tarball-filename))))
+          (unless local-egg?
+            (add-target! egg-tarball-filename 'fetch-tarball #f)
+            (make-rule egg-tarball-filename '()
+                       (shell-unless-egg-installed egg
+                        (shell-group
+                         (make-info egg "Fetching")
+                         ((fetch-command)
+                          ((egg-tarball-url) egg egg-tarball-filename)
+                          egg-tarball-filename))))
 
-          (add-target! egg-checksum-file 'fetch-checksum #f)
-          (make-rule egg-checksum-file '()
-                     (shell-unless-egg-installed egg
-                      (shell-group
-                       (make-info egg "Fetching checksum file")
-                       ((fetch-command)
-                        ((egg-tarball-url)
-                         egg
-                         (string-append egg-tarball-filename ".sha1"))
-                        egg-checksum-file))))
+            (add-target! egg-checksum-file 'fetch-checksum #f)
+            (make-rule egg-checksum-file '()
+                       (shell-unless-egg-installed egg
+                        (shell-group
+                         (make-info egg "Fetching checksum file")
+                         ((fetch-command)
+                          ((egg-tarball-url)
+                           egg
+                           (string-append egg-tarball-filename ".sha1"))
+                          egg-checksum-file))))
 
-          (add-target! (make-target egg 'checksum) 'checksum #t)
-          (make-rule (make-target egg 'checksum)
-                     (list egg-tarball-filename egg-checksum-file)
-                     (shell-unless-egg-installed egg
-                      (shell-group
-                       (make-info egg "Checking sum")
-                       ((checksum-command) egg-checksum-file))))
+            (add-target! (make-target egg 'checksum) 'checksum #t)
+            (make-rule (make-target egg 'checksum)
+                       (list egg-tarball-filename egg-checksum-file)
+                       (shell-unless-egg-installed egg
+                        (shell-group
+                         (make-info egg "Checking sum")
+                         ((checksum-command) egg-checksum-file))))
 
-          (add-target! egg-unpacked-dir 'unpack #f)
-          (make-rule egg-unpacked-dir
-                     (list (make-target egg 'checksum))
-                     (shell-unless-egg-installed egg
-                      (shell-group
-                       (make-info egg "Unpacking")
-                       ((extract-command) egg egg-tarball-filename))))
+            (add-target! egg-unpacked-dir 'unpack #f)
+            (make-rule egg-unpacked-dir
+                       (list (make-target egg 'checksum))
+                       (shell-unless-egg-installed egg
+                        (shell-group
+                         (make-info egg "Unpacking")
+                         ((extract-command) egg egg-tarball-filename))))
+            ) ;; local-egg?
 
           (add-target! (make-target egg 'install) 'install #t)
           (make-rule (make-target egg 'install)
-                     (cons
-                      egg-unpacked-dir
-                      (let loop ((deps deps))
-                        (if (null? deps)
-                            '()
-                            (let ((dep (car deps)))
-                              (unless (visited? dep)
-                                (set! targets
-                                      (append
-                                       targets
-                                       (gen-egg-rules
-                                        dep
-                                        (get-egg-entry dep egg-index))))
-                                (add-to-visited! dep))
-                              (add-target! (make-target dep 'install) 'install #t)
-                              (cons (make-target dep 'install)
-                                    (loop (cdr deps)))))))
-                     (shell-unless-egg-installed egg
-                      (shell-group
-                       (make-info egg "Building and installing")
-                       (sprintf "(cd ~a-~a && $(CHICKEN_INSTALL))"
-                                egg egg-version))))
+                     (let ((deps
+                            (let loop ((deps deps))
+                              (if (null? deps)
+                                  '()
+                                  (let ((dep (car deps)))
+                                    (unless (visited? dep)
+                                      (set! targets
+                                            (append
+                                             targets
+                                             (gen-egg-rules
+                                              dep
+                                              (get-egg-entry dep egg-index)
+                                              #f)))
+                                      (add-to-visited! dep))
+                                    (add-target! (make-target dep 'install) 'install #t)
+                                    (cons (make-target dep 'install)
+                                          (loop (cdr deps))))))))
+                       (if local-egg?
+                           deps
+                           (cons egg-unpacked-dir deps)))
+                     (let ((shell-code
+                            (shell-group
+                             (make-info egg "Building and installing")
+                             (let ((src-dir (if local-egg?
+                                                "$(LOCAL_EGG_DIR)"
+                                                (sprintf "~a-~a" egg egg-version))))
+                               (sprintf "(cd ~a && $(CHICKEN_INSTALL))" src-dir)))))
+                       (if local-egg?
+                           (sprintf "~a~a" (if verbose? "" "@") shell-code)
+                           (shell-unless-egg-installed egg shell-code))))
           targets)))
 
   (with-output-to-file (make-pathname out-dir "Makefile")
     (lambda ()
+      (when local-egg?
+        (printf "LOCAL_EGG_DIR ?= ~a\n" local-egg-dir))
       (when verbose?
         (printf "CSC_OPTIONS ?= -verbose\n"))
       (printf "CSI ?= ~a\n" (csi-program))
@@ -244,30 +298,30 @@
                       (make-target egg 'install))
                     eggs)))
 
-      (let* ((entries (map (lambda (egg)
-                             (get-egg-entry egg egg-index))
-                           eggs))
+      (let* ((entries (if local-egg?
+                          local-egg-entries
+                          (map (lambda (egg)
+                                 (get-egg-entry egg egg-index))
+                               eggs)))
              (deps (let loop ((entries entries))
                      (if (null? entries)
                          '()
                          (append (get-egg-deps (car entries))
                                  (loop (cdr entries))))))
              (targets '()))
-        ;; Force the installation of the egg specified on the
-        ;; command line (even if it is already installed)
         (set! targets
               (let loop ((eggs eggs)
                          (entries entries))
                 (if (null? eggs)
                     '()
-                    (append (gen-egg-rules (car eggs) (car entries))
+                    (append (gen-egg-rules (car eggs) (car entries) local-egg?)
                             (loop (cdr eggs) (cdr entries))))))
         (for-each (lambda (dep)
                     (get-egg-entry dep egg-index)
                     (set! targets
                           (append
                            targets
-                           (gen-egg-rules dep (get-egg-entry dep egg-index)))))
+                           (gen-egg-rules dep (get-egg-entry dep egg-index) #f))))
                   deps)
 
         ;; Extra targets
@@ -321,7 +375,10 @@
                  (current-output-port)
                  (current-error-port)))
         (this (pathname-strip-directory (program-name))))
-    (fprintf out "Usage: ~a [<options>] <egg> ...
+    (fprintf out "Usage: ~a [<options>] [<egg> ...]
+
+If no egg is provided as argument, the current directory is assumed to be
+the source directory of an egg.
 
 <options>
   --action|-a <action>:
@@ -421,9 +478,6 @@
                    (set! eggs (cons egg eggs))))
                (loop (cdr args)))))))
 
-  (when (null? eggs)
-    (usage 1))
-
   (info "Using ~a as output-directory." out-dir)
 
   (if config-file
@@ -441,7 +495,7 @@
     (parallel-tasks ntasks))
 
   (create-directory out-dir 'recursively)
-  (generate-makefile eggs force-dependencies? out-dir)
+  (generate-makefile eggs force-dependencies? (null? eggs) (current-directory) out-dir)
   (execute-action action out-dir)
   (if keep-output-dir?
       (printf "Sources of eggs and Makefile written into ~a\n" out-dir)
