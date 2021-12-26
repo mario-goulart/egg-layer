@@ -115,15 +115,16 @@
 (define (shell-group . exprs)
   (sprintf "{ ~a ;}" (string-intersperse exprs " && ")))
 
+(define (printer port fmt args)
+  (apply fprintf (cons port (cons (string-append fmt "\n") args))))
+
 (define (die! fmt . args)
-  (apply fprintf (cons (current-error-port)
-                       (cons (string-append fmt "\n") args)))
+  (printer (current-error-port) fmt args)
   (exit 1))
 
 (define (info fmt . args)
   (when verbose?
-    (apply fprintf (cons (current-output-port)
-                         (cons (string-append fmt "\n") args)))))
+    (printer (current-output-port) fmt args)))
 
 (define (generate-makefile eggs force-dependencies? out-dir log-dir)
   (system* ((fetch-command) (egg-index-url) egg-index-compressed-filename))
