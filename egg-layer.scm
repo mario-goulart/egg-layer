@@ -71,7 +71,9 @@
                   egg-index)
           (lambda (e1 e2)
             (version>=? (get-egg-version e1) (get-egg-version e2))))))
-    (car egg-entries)))
+    (if (null? egg-entries)
+        (die! "Egg not in egg index: ~a" egg)
+        (car egg-entries))))
 
 (define (make-target egg task)
   (sprintf "task_~a_~a" egg task))
