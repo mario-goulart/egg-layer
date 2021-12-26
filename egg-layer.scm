@@ -77,7 +77,7 @@
   (sprintf "task_~a_~a" egg task))
 
 (define (make-rule target deps . actions)
-  (printf "~a:~a\n~a\n\n"
+  (printf "~a: prepare~a\n~a\n\n"
           target
           (if (null? deps)
               ""
@@ -252,6 +252,10 @@
                       (make-target egg 'install))
                     eggs)))
 
+      (printf "prepare:\n\t~amkdir -p ~a\n\n"
+              (if verbose? "" "@")
+              (qs log-dir))
+
       (let* ((entries (map (lambda (egg)
                              (get-egg-entry egg egg-index))
                            eggs))
@@ -302,7 +306,7 @@
         (print "\t@echo 'clean: remove all egg tarballs, checksum files and egg directories'")
         (newline)
 
-        (printf ".PHONY: all clean help fetch unpack ~a\n"
+        (printf ".PHONY: all clean help fetch prepare unpack ~a\n"
                 (string-intersperse
                  (let loop ((targets targets))
                    (if (null? targets)
