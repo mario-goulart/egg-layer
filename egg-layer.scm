@@ -112,6 +112,9 @@
 (define (shell-or shell-exp1 shell-exp2)
   (sprintf "~a || ~a" shell-exp1 shell-exp2))
 
+(define (shell-group . exprs)
+  (sprintf "{ ~a ;}" (string-intersperse exprs " && ")))
+
 (define (die! fmt . args)
   (apply fprintf (cons (current-error-port)
                        (cons (string-append fmt "\n") args)))
@@ -148,7 +151,7 @@
               (if verbose? "" "$(LOG)"))))
 
   (define (make-info egg message)
-    (sprintf "@echo [~a] ~a" egg message))
+    (sprintf "echo [~a] ~a" egg message))
 
   (define (gen-egg-rules egg entry)
     ;; FIXME: this is a mess.  This procedure prints make rules and
@@ -169,35 +172,39 @@
 
           (add-target! egg-tarball-filename 'fetch-tarball #f)
           (make-rule egg-tarball-filename '()
-                     (make-info egg "Fetching")
                      (shell-unless-egg-installed egg
+                      (shell-group
+                       (make-info egg "Fetching")
                        ((fetch-command)
                         ((egg-tarball-url) egg egg-tarball-filename)
-                        egg-tarball-filename)))
+                        egg-tarball-filename))))
 
           (add-target! egg-checksum-file 'fetch-checksum #f)
           (make-rule egg-checksum-file '()
-                     (make-info egg "Fetching checksum file")
                      (shell-unless-egg-installed egg
+                      (shell-group
+                       (make-info egg "Fetching checksum file")
                        ((fetch-command)
                         ((egg-tarball-url)
                          egg
                          (string-append egg-tarball-filename ".sha1"))
-                        egg-checksum-file)))
+                        egg-checksum-file))))
 
           (add-target! (make-target egg 'checksum) 'checksum #t)
           (make-rule (make-target egg 'checksum)
                      (list egg-tarball-filename egg-checksum-file)
-                     (make-info egg "Checking sum")
                      (shell-unless-egg-installed egg
-                       ((checksum-command) egg-checksum-file)))
+                      (shell-group
+                       (make-info egg "Checking sum")
+                       ((checksum-command) egg-checksum-file))))
 
           (add-target! egg-unpacked-dir 'unpack #f)
           (make-rule egg-unpacked-dir
                      (list (make-target egg 'checksum))
-                     (make-info egg "Unpacking")
                      (shell-unless-egg-installed egg
-                       ((extract-command) egg egg-tarball-filename)))
+                      (shell-group
+                       (make-info egg "Unpacking")
+                       ((extract-command) egg egg-tarball-filename))))
 
           (add-target! (make-target egg 'install) 'install #t)
           (make-rule (make-target egg 'install)
@@ -218,10 +225,11 @@
                               (add-target! (make-target dep 'install) 'install #t)
                               (cons (make-target dep 'install)
                                     (loop (cdr deps)))))))
-                     (make-info egg "Building and installing")
                      (shell-unless-egg-installed egg
+                      (shell-group
+                       (make-info egg "Building and installing")
                        (sprintf "(cd ~a-~a && $(CHICKEN_INSTALL))"
-                                egg egg-version)))
+                                egg egg-version))))
           targets)))
 
   (with-output-to-file (make-pathname out-dir "Makefile")

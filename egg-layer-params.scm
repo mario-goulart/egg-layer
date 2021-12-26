@@ -44,7 +44,7 @@
                `(: (* any) ,egg "-" (=> version (+ any)) ".tar.gz" eol)
                tarball)
               'version)))
-       (sprintf "{ tar -xzf ~a && echo '\"~a\"' > ~a/VERSION; }"
+       (sprintf "tar -xzf ~a && echo '\"~a\"' > ~a/VERSION"
                 (qs tarball)
                 (qs version)
                 (irregex-replace `(: ".tar.gz" eol) tarball ""))))))
