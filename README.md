@@ -98,7 +98,7 @@ Alternatively, you can use the `--config-file` command line parameter
 to specify another file (in this case, `$HOME/.egg-layer.conf` will
 not be loaded).
 
-Command line options clobber settings make in configuration files.
+Command line options clobber settings made in configuration files.
 
 
 ### Bugs, limitations and assorted notes
