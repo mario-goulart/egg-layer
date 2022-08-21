@@ -122,5 +122,5 @@ Command line options clobber settings make in configuration files.
 
 * Its code is disgusting.
 
-* It is just very rough proof-of-concept.  It is incomplete and
+* It is just a very rough proof-of-concept.  It is incomplete and
   probably full of bugs.
