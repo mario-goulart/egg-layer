@@ -2,7 +2,7 @@
 
 **WARNING**: this is a hack.
 
-`egg-layer` is a tool that generate a Makefile to fetch and install
+`egg-layer` is a tool that generates a Makefile to fetch and install
 CHICKEN eggs.  Differently from chicken-install, it uses egg sources
 from tarballs available at [1].  `egg-layer` relies on external tools
 to fetch, verify and unpack tarballs.  The default configuration uses
