@@ -102,6 +102,13 @@
         (die! "Egg not in egg index: ~a" egg)
         (car egg-entries))))
 
+(define (get-tarball-version egg tarball)
+  (irregex-match-substring
+   (irregex-search
+    `(: (* any) ,(symbol->string egg) "-" (=> version (+ any)) ".tar.gz" eol)
+    tarball)
+   'version))
+
 (define (make-target egg task)
   (sprintf "task_~a_~a" egg task))
 
@@ -273,8 +280,32 @@
                              (make-info egg "Building and installing")
                              (let ((src-dir (if local-egg
                                                 "$(LOCAL_EGG_DIR)"
-                                                (sprintf "~a-~a" egg egg-version))))
-                               (sprintf "(cd ~a && $(CHICKEN_INSTALL))" src-dir)))))
+                                                (sprintf "~a-~a" egg egg-version)))
+                                   (egg-info-file
+                                    (make-pathname "$(CHICKEN_REPOSITORY_PATH)"
+                                                   (symbol->string egg)
+                                                   "egg-info")))
+                               (string-append
+                                "( "
+                                (sprintf "cd ~a && $(CHICKEN_INSTALL) && " src-dir)
+                                ;; This is absolutely horrendous, but from
+                                ;; CHICKEN 5.4.0 on the VERSION file is read
+                                ;; from $CHICKEN_EGG_CACHE/.cache-metadata, and
+                                ;; when chicken-install is called from the egg
+                                ;; source dir, the chicken-install cache is _not_
+                                ;; used at all, so the VERSION file is not read.
+                                ;; To work around that, we patch the egg-info file.
+                                (sprintf
+                                 (string-append
+                                  "$(CSI) -R chicken.pretty-print -e "
+                                  "'(let ((egg-info (with-input-from-file \"~a\" read))) "
+                                  "  (with-output-to-file \"~a\" (lambda () "
+                                  "  (pp (append egg-info (quote ((version \"~a\"))))))))'")
+                                 egg-info-file
+                                 egg-info-file
+                                 (get-tarball-version egg egg-tarball-filename)
+                                 )
+                                " )")))))
                        (if local-egg
                            (sprintf "~a~a" (if verbose? "" "@") shell-code)
                            (shell-unless-egg-installed egg shell-code))))
