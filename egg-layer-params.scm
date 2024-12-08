@@ -48,7 +48,9 @@
 (define checksum-command
   (make-parameter
    (lambda (file)
-     (sprintf "sha1sum -c ~a" (qs file)))))
+     ;; Replace tab with double space for compatibility with busybox'
+     ;; sha1sum.
+     (sprintf "cat ~a | sed 's/\\t/  /' | sha1sum -c -" (qs file)))))
 
 (define egg-index-url
   (make-parameter
