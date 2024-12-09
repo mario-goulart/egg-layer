@@ -397,7 +397,7 @@
                (sprintf " -j ~a" (parallel-tasks))
                " -j")))
       (change-directory dir)
-      (let ((status (system (sprintf "make ~a~a" action parallelization))))
+      (let ((status (system (sprintf "~a ~a~a" (make-program) action parallelization))))
         (unless (zero? status)
           (exit (arithmetic-shift status -8)))))))
 

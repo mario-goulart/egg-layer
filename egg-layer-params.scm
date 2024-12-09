@@ -46,11 +46,20 @@
                       (pathname-strip-extension compressed-file)))))))
 
 (define checksum-command
-  (make-parameter
-   (lambda (file)
-     ;; Replace tab with double space for compatibility with busybox'
-     ;; sha1sum.
-     (sprintf "cat ~a | sed 's/\\t/  /' | sha1sum -c -" (qs file)))))
+  (if (eq? (software-version) 'openbsd)
+      (make-parameter
+       (lambda (file)
+         (sprintf "cat ~a | tr '\\t' ' ' | sha1 -c" (qs file))))
+      (make-parameter
+       (lambda (file)
+         ;; Replace tab with double space for compatibility with busybox'
+         ;; sha1sum.
+         (sprintf "cat ~a | sed 's/\\t/  /' | sha1sum -c -" (qs file))))))
+
+(define make-program
+  (if (memq (software-version) '(dragonfly freebsd netbsd openbsd))
+      (make-parameter "gmake")
+      (make-parameter "make")))
 
 (define egg-index-url
   (make-parameter
