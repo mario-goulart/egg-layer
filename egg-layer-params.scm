@@ -28,9 +28,13 @@
                   (foreign-value "C_CHICKEN_INSTALL_PROGRAM" c-string))))
 
 (define fetch-command
-  (make-parameter
-   (lambda (url local-file)
-     (sprintf "wget -qnv ~a -O ~a" (qs url) (qs local-file)))))
+  (if (eq? (software-version) 'openbsd)
+      (make-parameter
+       (lambda (url local-file)
+         (sprintf "ftp -M -C -V -o ~a ~a" (qs local-file) (qs url))))
+      (make-parameter
+       (lambda (url local-file)
+         (sprintf "wget -qnv ~a -O ~a" (qs url) (qs local-file))))))
 
 (define extract-command
   (make-parameter
