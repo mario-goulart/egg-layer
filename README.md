@@ -42,7 +42,7 @@ the source directory of an egg.
 
   --config-file|-c <file>:
     Specify a configuration file alternative to the default one
-    ($HOME/.egglayer.conf).
+    ($HOME/.egg-layer.conf).
 
   --force-dependencies:
     Force processing actions for dependencies.  Without this option,
