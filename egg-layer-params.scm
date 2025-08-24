@@ -9,7 +9,13 @@
         (chicken platform)
         (chicken process))
 
-(define chicken-major-version 5)
+(cond-expand
+ (chicken-6
+  (import (scheme base)))
+ (else))
+
+(define chicken-major-version
+  (foreign-value "C_MAJOR_VERSION" int))
 
 (define parallel-tasks
   ;; The value of this parameter maps to the value of the -j parameter
