@@ -91,7 +91,7 @@ of CPUs on a Linux system:
 (import (chicken process))
 (import egg-layer-params)
 
-(parallel-tasks (with-input-from-pipe "nproc" read)
+(parallel-tasks (with-input-from-pipe "nproc" read))
 ```
 
 Alternatively, you can use the `--config-file` command line parameter
