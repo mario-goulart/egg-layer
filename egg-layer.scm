@@ -287,7 +287,7 @@
                                                    "egg-info")))
                                (string-append
                                 "( "
-                                (sprintf "cd ~a && $(CHICKEN_INSTALL) && " src-dir)
+                                (sprintf "cd ./~a && $(CHICKEN_INSTALL) && " src-dir)
                                 ;; This is absolutely horrendous, but from
                                 ;; CHICKEN 5.4.0 on the VERSION file is read
                                 ;; from $CHICKEN_EGG_CACHE/.cache-metadata, and
